@@ -1,9 +1,9 @@
 package crawler
 
 import (
-"io"
-"net/url"
-"golang.org/x/net/html"
+	"golang.org/x/net/html"
+	"io"
+	"net/url"
 )
 
 // for parsing html anchor tags
@@ -35,4 +35,3 @@ func Extract(body io.Reader, BaseUrl string) ([]string, error) {
 		}
 	}
 }
-
