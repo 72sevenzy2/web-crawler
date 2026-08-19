@@ -92,7 +92,7 @@ func extract(body io.Reader, BaseUrl string) ([]string, error) {
 			if token.Data == "a" {
 				for _, attr := range token.Attr {
 					if attr.Key == "href" {
-						resolved, err := base.Parse(attr.Key)
+						resolved, err := base.Parse(attr.Val)
 						if err == nil && (resolved.Scheme == "https" || resolved.Scheme == "http") {
 							links = append(links, resolved.String())
 						}
