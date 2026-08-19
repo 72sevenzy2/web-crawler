@@ -1,4 +1,4 @@
-package scraper
+package crawler
 
 import (
 	"fmt"
