@@ -2,8 +2,8 @@ package crawler
 
 import (
 	"fmt"
-	"log"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -20,8 +20,9 @@ type Crawler struct {
 	origins       map[string]bool
 }
 
-func NewCrawler() *Crawler {
+func NewCrawler(depth int) *Crawler {
 	return &Crawler{
+		depth: depth,
 		origins: make(map[string]bool),
 	}
 }

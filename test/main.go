@@ -7,6 +7,6 @@ import (
 // testing
 
 func main() {
-	c := crawler.NewCrawler()
+	c := crawler.NewCrawler(10)
 	c.Crawl("https://jsonplaceholder.typicode.com/guide/", 5)
 }
