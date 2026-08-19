@@ -45,7 +45,7 @@ func (c *Crawler) Crawl(url string, depth int) {
 
 	resp, err := http.Get(url)
 	if err != nil {
-		log.Fatal("request error when crawled:", url)
+		log.Println("request error when crawled:", url)
 		return
 	}
 
