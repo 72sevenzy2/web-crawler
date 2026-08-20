@@ -1,5 +1,4 @@
 #!/bin/bash
 
 # for testing
-go run test/main.go
-
+go test test/crawl_test.go
