@@ -23,6 +23,13 @@ func NewCrawler(depth int) *Crawler {
 	}
 }
 
+func (c *Crawler) Start(url string, startDepth int) {
+	c.wg.Go(func() { // auto increments wg counter and decrements after completion.
+		c.Crawl(url, startDepth)
+	})
+	c.wg.Wait()
+}
+
 func (c *Crawler) Crawl(url string, depth int) {
 	if depth > c.depth {
 		fmt.Println("max depth exceeded.")
