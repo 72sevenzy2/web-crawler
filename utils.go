@@ -1,16 +1,18 @@
 package crawler
 
 import (
-	"golang.org/x/net/html"
+	"fmt"
 	"io"
 	"net/url"
+
+	"golang.org/x/net/html"
 )
 
 // for parsing html anchor tags
 func Extract(body io.Reader, BaseUrl string) ([]string, error) {
 	base, err := url.Parse(BaseUrl)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error parsing url: %s", BaseUrl)
 	}
 
 	var links []string
