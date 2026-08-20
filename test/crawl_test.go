@@ -10,5 +10,6 @@ import (
 
 func TestCrawler(t *testing.T) {
 	c := crawler.NewCrawler(10)
-	c.Crawl("https://jsonplaceholder.typicode.com/guide/", 5)
+
+	c.Start("https://jsonplaceholder.typicode.com/guide/", 0)
 }
