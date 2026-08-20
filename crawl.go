@@ -34,6 +34,7 @@ func (c *Crawler) Start(url string, startDepth int) {
 }
 
 func (c *Crawler) crawl(url string, depth int) error {
+	
 	if depth > c.depth {
 		return fmt.Errorf("depth with %d had exceeded %d.", depth, c.depth)
 	}
@@ -70,7 +71,9 @@ func (c *Crawler) crawl(url string, depth int) error {
 		return err
 	}
 
+	// recursive call untill max depth is exceeded.
 	for _, link := range links {
+		fmt.Println(link) // printing discovered links
 		c.wg.Add(1)
 		go func(l string) {
 			defer c.wg.Done()
