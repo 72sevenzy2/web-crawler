@@ -11,7 +11,7 @@ import (
 // testing
 
 func TestCrawler(t *testing.T) {
-	c := crawler.NewCrawler(10)
+	c := crawler.NewCrawler(10, true)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second * 2)
 	defer cancel()
