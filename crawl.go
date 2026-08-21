@@ -3,7 +3,7 @@ package crawler
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
@@ -33,7 +33,7 @@ func (c *Crawler) Start(ctx context.Context, url string, startDepth int) {
 	c.wg.Go(func() { // auto increments wg counter and decrements after completion.
 		err := c.crawl(ctx, url, startDepth)
 		if err != nil {
-			log.Println(err.Error())
+			slog.Error("encountered crawl error.", "err:", err.Error())
 		}
 	})
 	c.wg.Wait()
@@ -89,8 +89,7 @@ func (c *Crawler) crawl(ctx context.Context, url string, depth int) error {
 		if !SameHost(url, link) && !c.allowCrossDomains {
 			continue // skip if not same domain origin
 		}
-
-		fmt.Println(link) // printing discovered links
+		slog.Info("scoured link:", "link", link)
 		c.wg.Add(1)
 		go func(l string) {
 			defer c.wg.Done()
