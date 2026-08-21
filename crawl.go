@@ -1,6 +1,7 @@
 package crawler
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -15,20 +16,20 @@ type Crawler struct {
 	originsLocker sync.Mutex
 	origins       map[string]bool
 
-	sem           chan struct{}
+	sem chan struct{}
 }
 
 func NewCrawler(depth int) *Crawler {
 	return &Crawler{
 		depth:   depth,
 		origins: make(map[string]bool),
-		sem: make(chan struct{}, 10), // 10 requests can be made for each crawler that spawns
+		sem:     make(chan struct{}, 10), // 10 requests can be made for each crawler that spawns
 	}
 }
 
-func (c *Crawler) Start(url string, startDepth int) {
+func (c *Crawler) Start(ctx context.Context, url string, startDepth int) {
 	c.wg.Go(func() { // auto increments wg counter and decrements after completion.
-		err := c.crawl(url, startDepth)
+		err := c.crawl(ctx, url, startDepth)
 		if err != nil {
 			log.Println(err.Error())
 		}
@@ -36,7 +37,12 @@ func (c *Crawler) Start(url string, startDepth int) {
 	c.wg.Wait()
 }
 
-func (c *Crawler) crawl(url string, depth int) error {
+func (c *Crawler) crawl(ctx context.Context, url string, depth int) error {
+	select {
+	case <-ctx.Done():
+		return nil
+	default:
+	}
 
 	if depth > c.depth {
 		return fmt.Errorf("depth with %d had exceeded %d.", depth, c.depth)
@@ -83,7 +89,7 @@ func (c *Crawler) crawl(url string, depth int) error {
 		c.wg.Add(1)
 		go func(l string) {
 			defer c.wg.Done()
-			c.crawl(l, depth+1)
+			c.crawl(ctx, l, depth+1)
 		}(link)
 	}
 
