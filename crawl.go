@@ -85,6 +85,10 @@ func (c *Crawler) crawl(ctx context.Context, url string, depth int) error {
 
 	// recursive call untill max depth is exceeded.
 	for _, link := range links {
+		if !SameHost(url, link) {
+			continue // skip if not same domain origin
+		}
+
 		fmt.Println(link) // printing discovered links
 		c.wg.Add(1)
 		go func(l string) {
