@@ -16,14 +16,16 @@ type Crawler struct {
 	originsLocker sync.Mutex
 	origins       map[string]bool
 
-	sem chan struct{}
+	allowCrossDomains bool
+	sem               chan struct{}
 }
 
-func NewCrawler(depth int) *Crawler {
+func NewCrawler(depth int, allowCD bool) *Crawler {
 	return &Crawler{
-		depth:   depth,
-		origins: make(map[string]bool),
-		sem:     make(chan struct{}, 10), // 10 requests can be made for each crawler that spawns
+		depth:             depth,
+		allowCrossDomains: allowCD, // determines whether crawler can visit external links (other than child host urls)
+		origins:           make(map[string]bool),
+		sem:               make(chan struct{}, 10), // 10 requests can be made for each crawler that spawns
 	}
 }
 
@@ -85,7 +87,7 @@ func (c *Crawler) crawl(ctx context.Context, url string, depth int) error {
 
 	// recursive call untill max depth is exceeded.
 	for _, link := range links {
-		if !SameHost(url, link) {
+		if !SameHost(url, link) && c.allowCrossDomains {
 			continue // skip if not same domain origin
 		}
 
