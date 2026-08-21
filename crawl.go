@@ -14,12 +14,15 @@ type Crawler struct {
 
 	originsLocker sync.Mutex
 	origins       map[string]bool
+
+	sem           chan struct{}
 }
 
 func NewCrawler(depth int) *Crawler {
 	return &Crawler{
 		depth:   depth,
 		origins: make(map[string]bool),
+		sem: make(chan struct{}, 10), // 10 requests can be made for each crawler that spawns
 	}
 }
 
@@ -34,7 +37,7 @@ func (c *Crawler) Start(url string, startDepth int) {
 }
 
 func (c *Crawler) crawl(url string, depth int) error {
-	
+
 	if depth > c.depth {
 		return fmt.Errorf("depth with %d had exceeded %d.", depth, c.depth)
 	}
@@ -49,7 +52,10 @@ func (c *Crawler) crawl(url string, depth int) error {
 
 	fmt.Println("crawling:", url)
 
+	c.sem <- struct{}{} // capping number of requests made with semaphore
 	resp, err := http.Get(url)
+	<-c.sem
+
 	if err != nil {
 		return fmt.Errorf("error requesting %s.", url)
 	}
