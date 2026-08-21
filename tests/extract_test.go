@@ -14,6 +14,7 @@ func TestValidExtractBody(t *testing.T) {
 	links, err := crawler.Extract(input, "https://jsonplaceholder.typicode.com/guide/")
 	if err != nil {
 		t.Fatalf("encountered: %s", err.Error())
+		return
 	}
 
 	for _, link := range links {
