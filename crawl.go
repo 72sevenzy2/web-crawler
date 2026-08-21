@@ -47,7 +47,7 @@ func (c *Crawler) crawl(ctx context.Context, url string, depth int) error {
 	}
 
 	if depth > c.depth {
-		return fmt.Errorf("depth with %d had exceeded %d.", depth, c.depth)
+		return nil
 	}
 
 	c.originsLocker.Lock()
@@ -63,22 +63,21 @@ func (c *Crawler) crawl(ctx context.Context, url string, depth int) error {
 	c.sem <- struct{}{} // capping number of requests made with semaphore
 	resp, err := http.Get(url)
 	<-c.sem
-
 	if err != nil {
-		return fmt.Errorf("error requesting %s.", url)
+		return nil
 	}
+
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("status code %s:", http.StatusText(resp.StatusCode))
+		return nil
 	}
 
-	cType := resp.Request.Header.Get("Content-Type")
+	cType := resp.Header.Get("Content-Type")
 
 	if !strings.Contains(cType, "text/html") {
 		return fmt.Errorf("invalid content-type with request, found: %s", cType)
 	}
-
-	defer resp.Body.Close()
 
 	links, err := Extract(resp.Body, url)
 	if err != nil {
@@ -87,7 +86,7 @@ func (c *Crawler) crawl(ctx context.Context, url string, depth int) error {
 
 	// recursive call untill max depth is exceeded.
 	for _, link := range links {
-		if !SameHost(url, link) && c.allowCrossDomains {
+		if !SameHost(url, link) && !c.allowCrossDomains {
 			continue // skip if not same domain origin
 		}
 
