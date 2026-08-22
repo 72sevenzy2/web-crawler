@@ -19,16 +19,20 @@ type Crawler struct {
 	originsLocker sync.Mutex
 	origins       map[string]bool
 
+	// optionals
 	allowCrossDomains bool
-	sem               chan struct{}
+	maxRetries        int
+
+	sem chan struct{}
 
 	limiterMu    sync.Mutex
 	limitedHosts map[string]*rate.Limiter
 }
 
-func NewCrawler(depth int, allowCD bool) *Crawler {
+func NewCrawler(depth int, allowCD bool, maxR int) *Crawler {
 	return &Crawler{
 		depth:             depth,
+		maxRetries:        maxR,
 		allowCrossDomains: allowCD, // determines whether crawler can visit external links (other than child host urls)
 		origins:           make(map[string]bool),
 		sem:               make(chan struct{}, 10), // 10 requests can be made for each crawler that spawns
@@ -76,7 +80,7 @@ func (c *Crawler) crawl(ctx context.Context, url string, depth int) error {
 
 	c.sem <- struct{}{} // capping number of requests made with semaphore
 	cl := http.Client{}
-	resp, err := RequestWithRetry(ctx, url, 5, &cl)
+	resp, err := RequestWithRetry(ctx, url, c.maxRetries, &cl)
 	<-c.sem
 
 	if err != nil {

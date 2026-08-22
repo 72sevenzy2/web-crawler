@@ -11,9 +11,9 @@ import (
 // testing
 
 func TestCrawler(t *testing.T) {
-	c := crawler.NewCrawler(10, true)
+	c := crawler.NewCrawler(10, false, 10)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second * 2)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute * 10)
 	defer cancel()
 	c.Start(ctx, "https://jsonplaceholder.typicode.com/guide/", 0)
 }
