@@ -1,4 +1,9 @@
-<h1 align="center">concurrently-safe web crawler for link traversal.</h1>
+<h1 align="center">concurrently-safe web crawler for traversing through links.</h1>
+<br>
+<h2>configurable options to the crawler:</h2>
+<h3>- custom max retry limits.</h3>
+<h3>- toggleable option for whether crawler reaches non-host url domains.</h3>
+<h3>- depth size, for which how deep into host url the crawler can crawl through.</h3>
 <br>
 <h2>usage:</h2>
   
@@ -12,9 +17,9 @@
   )
 
   func main() {
-    wc := crawler.NewCrawler(10, true)
+    wc := crawler.NewCrawler(10, true, 5)
     /*
-      NewCrawler() takes in a max depth, which is the number of times to traverse through links, and a boolean to which allow traversing through external domains other than the host.
+      NewCrawler() takes in a max depth, which is the number of times to traverse through links, and a boolean to which allow traversing through external domains other than the host, and also takes in a number of retries if one crawl-through were to fail.
     */
 
     ctx, cancel := context.WithTimeout(context.Background(), time.Second * 10)
