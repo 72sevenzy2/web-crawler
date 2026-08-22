@@ -32,6 +32,7 @@ func NewCrawler(depth int, allowCD bool) *Crawler {
 		allowCrossDomains: allowCD, // determines whether crawler can visit external links (other than child host urls)
 		origins:           make(map[string]bool),
 		sem:               make(chan struct{}, 10), // 10 requests can be made for each crawler that spawns
+		limitedHosts:      make(map[string]*rate.Limiter),
 	}
 }
 
@@ -67,7 +68,7 @@ func (c *Crawler) crawl(ctx context.Context, url string, depth int) error {
 	fmt.Println("crawling:", url)
 
 	// claim token before acquiring a slot via semaphore.
-	limiter := c.LimitHost(ctx, url)
+	limiter := c.LimitHost(url)
 	if err := limiter.Wait(ctx); err != nil {
 		slog.Error("encountered", "rate limiting err", err)
 		return nil // expected error so not flagged here.
@@ -90,7 +91,7 @@ func (c *Crawler) crawl(ctx context.Context, url string, depth int) error {
 	cType := resp.Header.Get("Content-Type")
 
 	if !strings.Contains(cType, "text/html") {
-		slog.Error("invalid header", "err", errors.New(cType))
+		slog.Error("invalid header", "found", errors.New(cType))
 		return nil // expected
 	}
 
@@ -106,9 +107,10 @@ func (c *Crawler) crawl(ctx context.Context, url string, depth int) error {
 		}
 		slog.Info("scoured link:", "link", link)
 		c.wg.Add(1)
-		c.wg.Go(func() {
-			c.crawl(ctx, link, depth+1)
-		})
+		go func(l string) {
+			defer c.wg.Done()
+			c.crawl(ctx, l, depth+1)
+		}(link)
 	}
 
 	return nil

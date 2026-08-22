@@ -53,7 +53,7 @@ func SameHost(u1, u2 string) bool {
 }
 
 // limiters for each hosts
-func (c *Crawler) LimitHost(ctx context.Context, host string) *rate.Limiter {
+func (c *Crawler) LimitHost(host string) *rate.Limiter {
 	c.limiterMu.Lock()
 	defer c.limiterMu.Unlock()
 	lim, ok := c.limitedHosts[host]
