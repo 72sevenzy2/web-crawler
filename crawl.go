@@ -106,10 +106,9 @@ func (c *Crawler) crawl(ctx context.Context, url string, depth int) error {
 		}
 		slog.Info("scoured link:", "link", link)
 		c.wg.Add(1)
-		go func(l string) {
-			defer c.wg.Done()
-			c.crawl(ctx, l, depth+1)
-		}(link)
+		c.wg.Go(func() {
+			c.crawl(ctx, link, depth+1)
+		})
 	}
 
 	return nil
