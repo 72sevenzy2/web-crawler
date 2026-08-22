@@ -1,4 +1,4 @@
-<h1 align="center">concurrency-safe web crawler for link traversal.</h1>
+<h1 align="center">concurrently-safe web crawler for link traversal.</h1>
 <br>
 <h2>usage:</h2>
   
