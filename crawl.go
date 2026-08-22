@@ -75,11 +75,13 @@ func (c *Crawler) crawl(ctx context.Context, url string, depth int) error {
 	}
 
 	c.sem <- struct{}{} // capping number of requests made with semaphore
-	resp, err := http.Get(url)
+	cl := http.Client{}
+	resp, err := RequestWithRetry(ctx, url, 5, &cl)
 	<-c.sem
 
 	if err != nil {
-		return nil
+		slog.Error("request error", "err", err)
+		return err
 	}
 
 	defer resp.Body.Close()

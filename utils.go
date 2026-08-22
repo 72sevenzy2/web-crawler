@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"time"
 
 	"golang.org/x/net/html"
 	"golang.org/x/time/rate"
@@ -65,6 +66,31 @@ func (c *Crawler) LimitHost(host string) *rate.Limiter {
 }
 
 // wrapping request with retries.
-func RequestWithRetry(ctx *context.Context, url string, maxRetries int) (*http.Response, error) {
-	return nil, nil
+func RequestWithRetry(ctx context.Context, url string, maxRetries int, client *http.Client) (*http.Response, error) {
+	var lastErr error
+	for v := range maxRetries {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		resp, err := client.Do(req)
+		if err == nil && resp.StatusCode < 500 { // possible non-retryable client error
+			return resp, nil
+		}
+		if err == nil {
+			defer resp.Body.Close()
+			lastErr = nil
+		} else {
+			lastErr = err
+		}
+
+		delay := time.Duration(1<<v) * 200 * time.Millisecond // retry after 200 milliseconds (times by 2 to avoid being rete limited)
+		select {
+		case <-time.After(delay): // waited by each iteration
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	return nil, lastErr
 }
