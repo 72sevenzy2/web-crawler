@@ -85,7 +85,7 @@ func RequestWithRetry(ctx context.Context, url string, maxRetries int, client *h
 			lastErr = err
 		}
 
-		delay := time.Duration(1<<v) * 200 * time.Millisecond // retry after 200 milliseconds (times by 2 to avoid being rete limited)
+		delay := time.Duration(1<<v) * 200 * time.Millisecond // retry after 200 milliseconds (times by 2 to avoid being rate-limited)
 		select {
 		case <-time.After(delay): // waited by each iteration
 		case <-ctx.Done():
