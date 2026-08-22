@@ -8,6 +8,7 @@ import (
 	"net/url"
 
 	"golang.org/x/net/html"
+	"golang.org/x/time/rate"
 )
 
 // for parsing html anchor tags
@@ -51,5 +52,19 @@ func SameHost(u1, u2 string) bool {
 	return url.Host == url2.Host
 }
 
+// limiters for each hosts
+func (c *Crawler) LimitHost(ctx context.Context, host string) *rate.Limiter {
+	c.limiterMu.Lock()
+	defer c.limiterMu.Unlock()
+	lim, ok := c.limitedHosts[host]
+	if !ok {
+		lim = rate.NewLimiter(rate.Limit(10), 10) // refill 10/per second, with bursts of 10 per concurrent gorountine
+		c.limitedHosts[host] = lim
+	}
+	return lim
+}
+
 // wrapping request with retries.
-func RequestWithRetry(ctx *context.Context, url string, maxRetries int) (*http.Response, error) { return nil, nil }
+func RequestWithRetry(ctx *context.Context, url string, maxRetries int) (*http.Response, error) {
+	return nil, nil
+}

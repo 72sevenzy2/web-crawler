@@ -2,11 +2,14 @@ package crawler
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
+
+	"golang.org/x/time/rate"
 )
 
 type Crawler struct {
@@ -18,6 +21,9 @@ type Crawler struct {
 
 	allowCrossDomains bool
 	sem               chan struct{}
+
+	limiterMu    sync.Mutex
+	limitedHosts map[string]*rate.Limiter
 }
 
 func NewCrawler(depth int, allowCD bool) *Crawler {
@@ -33,7 +39,7 @@ func (c *Crawler) Start(ctx context.Context, url string, startDepth int) {
 	c.wg.Go(func() { // auto increments wg counter and decrements after completion.
 		err := c.crawl(ctx, url, startDepth)
 		if err != nil {
-			slog.Error("encountered crawl error.", "err:", err.Error())
+			slog.Error("encountered crawl error", "err", err)
 		}
 	})
 	c.wg.Wait()
@@ -60,9 +66,17 @@ func (c *Crawler) crawl(ctx context.Context, url string, depth int) error {
 
 	fmt.Println("crawling:", url)
 
+	// claim token before acquiring a slot via semaphore.
+	limiter := c.LimitHost(ctx, url)
+	if err := limiter.Wait(ctx); err != nil {
+		slog.Error("encountered", "rate limiting err", err)
+		return nil // expected error so not flagged here.
+	}
+
 	c.sem <- struct{}{} // capping number of requests made with semaphore
 	resp, err := http.Get(url)
 	<-c.sem
+
 	if err != nil {
 		return nil
 	}
@@ -76,7 +90,8 @@ func (c *Crawler) crawl(ctx context.Context, url string, depth int) error {
 	cType := resp.Header.Get("Content-Type")
 
 	if !strings.Contains(cType, "text/html") {
-		return fmt.Errorf("invalid content-type with request, found: %s", cType)
+		slog.Error("invalid header", "err", errors.New(cType))
+		return nil // expected
 	}
 
 	links, err := Extract(resp.Body, url)
