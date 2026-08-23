@@ -80,8 +80,9 @@ func SameHost(u1, u2 string) bool {
 	if err1 != nil || err2 != nil {
 		return false
 	}
-
-	return a.Host == b.Host
+	
+	// a/b.Hostname() strips ports (if present), strings.EqualFold() for case insensivity for domain matching.
+	return strings.EqualFold(a.Hostname(), b.Hostname())
 }
 
 // limiters for each hosts
