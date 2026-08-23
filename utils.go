@@ -1,10 +1,12 @@
 package crawler
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"golang.org/x/net/html"
@@ -22,6 +24,8 @@ func Extract(body io.Reader, BaseUrl string) ([]string, error) {
 		return nil, fmt.Errorf("error parsing %s: %w", BaseUrl, err)
 	}
 
+	// map in which to hold seen urls to avoid duplicated results in links
+	var seen map[string]struct{}
 	var links []string
 	limited := io.LimitReader(body, maxHTMLParseSize)
 	tokenizer := html.NewTokenizer(limited) // cap reading size
@@ -29,15 +33,38 @@ func Extract(body io.Reader, BaseUrl string) ([]string, error) {
 		tt := tokenizer.Next()
 		switch tt {
 		case html.ErrorToken:
-			return links, nil
+			err := tokenizer.Err()
+
+			if errors.Is(err, io.EOF) { // end of stream
+				return links, nil
+			}
 		case html.StartTagToken, html.SelfClosingTagToken:
 			token := tokenizer.Token()
-			if token.Data == "a" {
+			// DataAtom being the fast path to determine whether anchor tag exists, fallback to string comparison with token.Data
+			if token.DataAtom.String() == "a" || token.Data == "a" {
 				for _, attr := range token.Attr {
 					if attr.Key == "href" {
-						resolved, err := base.Parse(attr.Val)
-						if err == nil && (resolved.Scheme == "https" || resolved.Scheme == "http") {
-							links = append(links, resolved.String())
+						val := strings.TrimSpace(attr.Val)
+						// skip empty links and none-HTTP urls early.
+						if val == "" || strings.HasPrefix(val, "javascript:") || strings.HasPrefix(val, "mailto:") {
+							continue
+						}
+
+						resolved, err := base.Parse(BaseUrl)
+						if err != nil {
+							continue
+						}
+
+						// stripping URL fragments to avoid crawling a page more than once.
+						// eg sections#post will be stripped to sections.
+						resolved.Fragment = ""
+
+						if resolved.Scheme == "https" || resolved.Scheme == "http" {
+							link := resolved.String()
+							if _, ok := seen[link]; !ok {
+								seen[link] = struct{}{} // mark as seen
+								links = append(links, link)
+							}
 						}
 					}
 				}
@@ -74,18 +101,18 @@ type RetryTransport struct {
 	delay time.Duration
 
 	allowedRetries map[int]int
-	defaultRetries     int
+	defaultRetries int
 }
 
 func NewRetryClient(delay time.Duration, maxR int) *http.Client {
 	return &http.Client{
 		Transport: &RetryTransport{
-			Base:       http.DefaultTransport,
-			delay:      delay,
+			Base:  http.DefaultTransport,
+			delay: delay,
 			allowedRetries: map[int]int{
-				http.StatusRequestTimeout: 2,
+				http.StatusRequestTimeout:     2,
 				http.StatusMisdirectedRequest: 2,
-				http.StatusTooEarly: 2,
+				http.StatusTooEarly:           2,
 			},
 			defaultRetries: maxR,
 		},
@@ -112,7 +139,7 @@ func (r *RetryTransport) RoundTrip(z *http.Request) (*http.Response, error) {
 		t = http.DefaultTransport
 	}
 
-	for v := range r.defaultRetries{
+	for v := range r.defaultRetries {
 		resp, err := t.RoundTrip(z)
 
 		// clean resp body (avoiding connection leaks)
