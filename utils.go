@@ -80,7 +80,7 @@ func SameHost(u1, u2 string) bool {
 	if err1 != nil || err2 != nil {
 		return false
 	}
-	
+
 	// a/b.Hostname() strips ports (if present), strings.EqualFold() for case insensivity for domain matching.
 	return strings.EqualFold(a.Hostname(), b.Hostname())
 }
@@ -98,28 +98,29 @@ func (c *Crawler) LimitHost(host string) *rate.Limiter {
 }
 
 type RetryTransport struct {
-	Base  http.RoundTripper
-	delay time.Duration
+	Base         http.RoundTripper
+	Delay        time.Duration
+	InitialDelay time.Duration
+	MaxRetries   int
 
-	allowedRetries map[int]int
-	defaultRetries int
+	// will hold how many retries specific request status codes can do.
+	AllowedRetries map[int]int
 }
 
-func NewRetryClient(delay time.Duration, maxR int) *http.Client {
+func NewRetryClient(initDelay time.Duration, maxRetries int) *http.Client {
 	return &http.Client{
 		Transport: &RetryTransport{
-			Base:  http.DefaultTransport,
-			delay: delay,
-			allowedRetries: map[int]int{
+			Base:         http.DefaultTransport,
+			InitialDelay: initDelay,
+			MaxDelay:     time.Second * 3,
+			AllowedRetries: map[int]int{
 				http.StatusRequestTimeout:     2,
 				http.StatusMisdirectedRequest: 2,
 				http.StatusTooEarly:           2,
 			},
-			defaultRetries: maxR,
 		},
 	}
 }
-
 func (r *RetryTransport) RetryOnTransientErr(status int) int {
 	if v, ok := r.allowedRetries[status]; ok {
 		return v
@@ -170,4 +171,16 @@ func (r *RetryTransport) RoundTrip(z *http.Request) (*http.Response, error) {
 		}
 	}
 	return nil, lastErr
+}
+
+// MaxDrainSize is to limit number of bytes when draining resp.Body.
+// Also prevents draining massive payloads from HTML.
+const MaxDrainSize = 64 * 1024 // 64 KiB
+
+func (r *RetryTransport) DrainClose(resp *http.Response) {
+	if resp == nil || resp.Body == nil {
+		return
+	}
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, MaxDrainSize)) // free underlying tcp connection.
+	_ = resp.Body.Close()
 }
