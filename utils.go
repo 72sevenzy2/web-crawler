@@ -65,31 +65,52 @@ func (c *Crawler) LimitHost(host string) *rate.Limiter {
 	return lim
 }
 
-// wrapping request with retries.
-func RequestWithRetry(ctx context.Context, url string, maxRetries int, client *http.Client) (*http.Response, error) {
-	var lastErr error
-	for v := range maxRetries {
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-		if err != nil {
-			return nil, err
-		}
+// retry logic configurations
+type RetryTransport struct {
+	Base       http.RoundTripper
+	delay      time.Duration
+	ctx        context.Context
+	maxRetries int
+}
 
-		resp, err := client.Do(req)
-		if err == nil && resp.StatusCode < 500 { // possible non-retryable client error
+func NewRetryClient(delay time.Duration, maxR int) *http.Client {
+	return &http.Client{
+		Transport: &RetryTransport{
+			Base: http.DefaultTransport,
+			delay: delay,
+			maxRetries: maxR,
+		},
+	}
+}
+
+func (r *RetryTransport) RoundTrip(z *http.Request) (*http.Response, error) {
+	t := r.Base
+	var lastErr error
+
+	if t == nil {
+		t = http.DefaultTransport
+	}
+
+	for v := range r.maxRetries {
+		resp, err := t.RoundTrip(z)
+		if err == nil && resp.StatusCode < 500 {
 			return resp, nil
 		}
+
+		// clean resp body (avoiding connection leaks)
 		if err == nil {
 			defer resp.Body.Close()
-			lastErr = nil
-		} else {
-			lastErr = err
+			io.Copy(io.Discard, resp.Body) // consume response body so that the underlying tcp connection can be reused by http transport.
 		}
 
-		delay := time.Duration(1<<v) * 200 * time.Millisecond // retry after 200 milliseconds (times by 2 to avoid being rate-limited)
+		lastErr = err
+
+		delay := time.Duration(1<<v) * r.delay
+		timer := time.NewTimer(delay)
 		select {
-		case <-time.After(delay): // waited by each iteration
-		case <-ctx.Done():
-			return nil, ctx.Err()
+		case <-timer.C:
+		case <-z.Context().Done():
+			return resp, z.Context().Err()
 		}
 	}
 	return nil, lastErr

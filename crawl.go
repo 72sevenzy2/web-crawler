@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"golang.org/x/time/rate"
 )
@@ -27,6 +29,8 @@ type Crawler struct {
 
 	limiterMu    sync.Mutex
 	limitedHosts map[string]*rate.Limiter
+
+	client *http.Client
 }
 
 func NewCrawler(depth int, allowCD bool, maxR int) *Crawler {
@@ -37,6 +41,7 @@ func NewCrawler(depth int, allowCD bool, maxR int) *Crawler {
 		origins:           make(map[string]bool),
 		sem:               make(chan struct{}, 10), // 10 requests can be made for each crawler that spawns
 		limitedHosts:      make(map[string]*rate.Limiter),
+		client:            NewRetryClient(time.Millisecond*200, 5),
 	}
 }
 
@@ -78,10 +83,23 @@ func (c *Crawler) crawl(ctx context.Context, url string, depth int) error {
 		return nil // expected error so not flagged here.
 	}
 
-	c.sem <- struct{}{} // capping number of requests made with semaphore
-	cl := http.Client{}
-	resp, err := RequestWithRetry(ctx, url, c.maxRetries, &cl)
-	<-c.sem
+	select {
+	case c.sem <- struct{}{}:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+
+	defer func() {
+		<-c.sem
+	}()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		slog.Error("request initialization error", "err", err)
+		return err
+	}
+
+	resp, err := c.client.Do(req)
 
 	if err != nil {
 		slog.Error("request error", "err", err)
@@ -105,6 +123,8 @@ func (c *Crawler) crawl(ctx context.Context, url string, depth int) error {
 	if err != nil {
 		return err
 	}
+
+	io.Copy(io.Discard, resp.Body)
 
 	// recursive call untill max depth is exceeded.
 	for _, link := range links {
