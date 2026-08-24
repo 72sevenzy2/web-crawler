@@ -1,9 +1,11 @@
 package crawler
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -102,13 +104,13 @@ func (c *Crawler) LimitHost(host string) *rate.Limiter {
 	c.limiterMu.Lock() // exclusive lock for write operations
 	defer c.limiterMu.Unlock()
 
-	// double check if gorountines race here after a gorountines write.
+	// double check if gorountines race here after c.limiterMu.Unlock()
 	if lim, ok := c.limitedHosts[t]; ok {
 		return lim
 	}
 
 	c.limitedHosts[t] = rate.NewLimiter(10, 10) // refill 10 per/sec, with bursts of 10.
-	return c.limitedHosts[t] // return limiter to specificed host
+	return c.limitedHosts[t]                    // return limiter to specificed host
 }
 
 type RetryTransport struct {
@@ -127,7 +129,7 @@ func NewRetryClient(initDelay time.Duration, maxRetries int) *http.Client {
 		Transport: &RetryTransport{
 			Base:         http.DefaultTransport,
 			InitialDelay: initDelay,
-			MaxDelay:     time.Second * 3,
+			Delay:        time.Second * 3,
 			AllowedRetries: map[int]int{
 				http.StatusRequestTimeout:     2, // 408
 				http.StatusTooEarly:           2, // 425
@@ -140,48 +142,88 @@ func NewRetryClient(initDelay time.Duration, maxRetries int) *http.Client {
 		},
 	}
 }
-func (r *RetryTransport) RetryOnTransientErr(status int) int {
-	if v, ok := r.allowedRetries[status]; ok {
-		return v
+
+// Determines whether status is warrant to retries.
+func (r *RetryTransport) isRetryableStatus(status, attempt int) bool {
+	if t, ok := r.AllowedRetries[status]; ok { // is warrant to retry
+		return attempt < t
 	}
 
-	if status >= 500 {
-		return r.defaultRetries
+	// general server-side errors
+	if status > 500 {
+		return attempt < r.MaxRetries // default to r.MaxRetries if so.
 	}
 
-	return 0
+	return false
+}
+
+// Determines whether error is transient to network glitch
+func (r *RetryTransport) isRetryableNetworkErr(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	// check if err was caused by caller
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+
+	var nErr net.Error
+	if errors.As(err, &nErr) { // caused by temporary OS network glitches and such.
+		return true
+	}
+
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return true // caused by server abruptly closing client keep-alive socket.
+	}
+
+	return false
 }
 
 func (r *RetryTransport) RoundTrip(z *http.Request) (*http.Response, error) {
 	t := r.Base
-	var lastErr error
-
 	if t == nil {
 		t = http.DefaultTransport
 	}
 
-	for v := range r.defaultRetries {
-		resp, err := t.RoundTrip(z)
+	var (
+		maxAttempts = r.MaxRetries + 1 // MaxRetries must exclude initial request
+		lastResp    *http.Response
+		lastErr     error
+	)
 
-		// clean resp body (avoiding connection leaks)
-		if err == nil {
-			retries := r.RetryOnTransientErr(resp.StatusCode)
-
-			if retries == 0 {
-				return resp, nil
-			}
-
-			if v >= retries {
-				return resp, nil
-			}
-
-			io.Copy(io.Discard, resp.Body) // consume response body so that the underlying tcp connection can be reused by http transport.
-			resp.Body.Close()
+	for v := range r.MaxRetries {
+		// verify context deadline/cancellation before proceeding to network call
+		if err := z.Context().Err(); err != nil {
+			return nil, z.Context().Err()
 		}
 
+		resp, err := t.RoundTrip(z)
 		lastErr = err
 
-		delay := time.Duration(1<<v) * r.delay
+		if err == nil {
+			// if succesfully, return immediately after making sure it isnt an retryable status.
+			if !r.isRetryableStatus(resp.StatusCode, v) {
+				return resp, nil
+			}
+			lastResp = resp
+		} else {
+			// check if is isnt an transient network error and if there are attempts remaining.
+			if !r.isRetryableNetworkErr(err) || v <= maxAttempts-1 { // -1 as we added 1 initially for first request.
+				return nil, err
+			}
+			lastErr = err
+		}
+
+		lastResp = nil
+		r.DrainClose(resp) // drain response body.
+
+		// check if we have attempts remaining.
+		if v == maxAttempts-1 {
+			break // exit loop and return results
+		}
+
+		delay := time.Duration(1<<v) * r.Delay
 		timer := time.NewTimer(delay)
 		select {
 		case <-timer.C:
@@ -189,17 +231,23 @@ func (r *RetryTransport) RoundTrip(z *http.Request) (*http.Response, error) {
 			return nil, z.Context().Err()
 		}
 	}
-	return nil, lastErr
+
+	if lastErr != nil {
+		return nil, lastErr
+	}
+	return lastResp, nil
 }
 
 // MaxDrainSize is to limit number of bytes when draining resp.Body.
-// Also prevents draining massive payloads from HTML.
+// Also prevents draining massive payloads from HTML, which can hang for long periods.
 const MaxDrainSize = 64 * 1024 // 64 KiB
 
+// for consuming underlying TCP connection to remote node, so that http transport can reuse connection.
 func (r *RetryTransport) DrainClose(resp *http.Response) {
+	// resp == nil as fast path
 	if resp == nil || resp.Body == nil {
 		return
 	}
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, MaxDrainSize)) // free underlying tcp connection.
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, MaxDrainSize))
 	_ = resp.Body.Close()
 }
