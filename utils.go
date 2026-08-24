@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
@@ -223,7 +224,7 @@ func (r *RetryTransport) RoundTrip(z *http.Request) (*http.Response, error) {
 			break // exit loop and return results
 		}
 
-		delay := time.Duration(1<<v) * r.Delay
+		delay := r.calculateBackoffDelay(v)
 		timer := time.NewTimer(delay)
 		select {
 		case <-timer.C:
@@ -250,4 +251,16 @@ func DrainClose(resp *http.Response) {
 	}
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, MaxDrainSize))
 	_ = resp.Body.Close()
+}
+
+// for calculating backoff delay upon request failure with jittered duration, this avoids the "thundering herd" design flaw.
+func (r *RetryTransport) calculateBackoffDelay(attempt int) time.Duration {
+	backoff := float64(attempt) * float64(int(1)<<attempt) // 2 ^ attempt after big left shift.
+	// verify backoff doesnt exceed r.MaxDelay
+	if r.Delay > 0 && time.Duration(backoff) > r.Delay {
+		backoff = float64(r.Delay) // fallback of r.Delay if exceeded.
+	}
+
+	jitteredV := rand.Float64() * backoff
+	return time.Duration(jitteredV)
 }
