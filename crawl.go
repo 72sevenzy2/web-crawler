@@ -27,7 +27,7 @@ type Crawler struct {
 
 	sem chan struct{}
 
-	limiterMu    sync.Mutex
+	limiterMu    sync.RWMutex // allows for concurrent reads non-blocking.
 	limitedHosts map[string]*rate.Limiter
 
 	client *http.Client
