@@ -25,7 +25,7 @@ func Extract(body io.Reader, BaseUrl string) ([]string, error) {
 	}
 
 	// map in which to hold seen urls to avoid duplicated results in links
-	var seen map[string]struct{}
+	seen := make(map[string]struct{})
 	var links []string
 	limited := io.LimitReader(body, maxHTMLParseSize)
 	tokenizer := html.NewTokenizer(limited) // cap reading size
@@ -33,7 +33,6 @@ func Extract(body io.Reader, BaseUrl string) ([]string, error) {
 		tt := tokenizer.Next()
 		switch tt {
 		case html.ErrorToken:
-			err := tokenizer.Err()
 
 			if errors.Is(err, io.EOF) { // end of stream
 				return links, nil
@@ -73,6 +72,7 @@ func Extract(body io.Reader, BaseUrl string) ([]string, error) {
 	}
 }
 
+// strings.EqualFold() allows for RFC compliancy f
 // comparing hosts per link to avoid cross-domain recurse
 func SameHost(u1, u2 string) bool {
 	a, err1 := url.Parse(u1)
@@ -87,14 +87,28 @@ func SameHost(u1, u2 string) bool {
 
 // limiters for each hosts
 func (c *Crawler) LimitHost(host string) *rate.Limiter {
-	c.limiterMu.Lock()
-	defer c.limiterMu.Unlock()
-	lim, ok := c.limitedHosts[host]
-	if !ok {
-		lim = rate.NewLimiter(rate.Limit(10), 10) // refill 10/per second, with bursts of 10 per concurrent gorountine
-		c.limitedHosts[host] = lim
+	// normalise before lookups
+	t := strings.ToLower(strings.TrimSpace(host))
+
+	// fast path
+	c.limiterMu.RLock() // RLock() allows for high concurrent reads without blocking
+	lim, ok := c.limitedHosts[t]
+	c.limiterMu.RUnlock()
+	if ok {
+		return lim
 	}
-	return lim
+
+	// store in lookup map and return limiter
+	c.limiterMu.Lock() // exclusive lock for write operations
+	defer c.limiterMu.Unlock()
+
+	// double check if gorountines race here after a gorountines write.
+	if lim, ok := c.limitedHosts[t]; ok {
+		return lim
+	}
+
+	c.limitedHosts[t] = rate.NewLimiter(10, 10) // refill 10 per/sec, with bursts of 10.
+	return c.limitedHosts[t] // return limiter to specificed host
 }
 
 type RetryTransport struct {
@@ -109,14 +123,19 @@ type RetryTransport struct {
 
 func NewRetryClient(initDelay time.Duration, maxRetries int) *http.Client {
 	return &http.Client{
+		Timeout: time.Second * 30, // safeguards against hung TCP handshakes/unresponesive backends.
 		Transport: &RetryTransport{
 			Base:         http.DefaultTransport,
 			InitialDelay: initDelay,
 			MaxDelay:     time.Second * 3,
 			AllowedRetries: map[int]int{
-				http.StatusRequestTimeout:     2,
-				http.StatusMisdirectedRequest: 2,
-				http.StatusTooEarly:           2,
+				http.StatusRequestTimeout:     2, // 408
+				http.StatusTooEarly:           2, // 425
+				http.StatusMisdirectedRequest: 2, // 421
+				http.StatusTooManyRequests:    3, // 429
+				http.StatusBadGateway:         3, // 502
+				http.StatusServiceUnavailable: 3, // 503
+				http.StatusGatewayTimeout:     3, // 504
 			},
 		},
 	}
