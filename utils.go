@@ -93,24 +93,24 @@ func (c *Crawler) LimitHost(host string) *rate.Limiter {
 	t := strings.ToLower(strings.TrimSpace(host))
 
 	// fast path
-	c.limiterMu.RLock() // RLock() allows for high concurrent reads without blocking
-	lim, ok := c.limitedHosts[t]
-	c.limiterMu.RUnlock()
+	c.LimiterLock.RLock() // RLock() allows for high concurrent reads without blocking
+	lim, ok := c.LimitedHosts[t]
+	c.LimiterLock.RUnlock()
 	if ok {
 		return lim
 	}
 
 	// store in lookup map and return limiter
-	c.limiterMu.Lock() // exclusive lock for write operations
-	defer c.limiterMu.Unlock()
+	c.LimiterLock.Lock() // exclusive lock for write operations
+	defer c.LimiterLock.Unlock()
 
 	// double check if gorountines race here after c.limiterMu.Unlock()
-	if lim, ok := c.limitedHosts[t]; ok {
+	if lim, ok := c.LimitedHosts[t]; ok {
 		return lim
 	}
 
-	c.limitedHosts[t] = rate.NewLimiter(10, 10) // refill 10 per/sec, with bursts of 10.
-	return c.limitedHosts[t]                    // return limiter to specificed host
+	c.LimitedHosts[t] = rate.NewLimiter(10, 10) // refill 10 per/sec, with bursts of 10.
+	return c.LimitedHosts[t]                    // return limiter to specificed host
 }
 
 type RetryTransport struct {
@@ -216,7 +216,7 @@ func (r *RetryTransport) RoundTrip(z *http.Request) (*http.Response, error) {
 		}
 
 		lastResp = nil
-		r.DrainClose(resp) // drain response body.
+		DrainClose(resp) // drain response body.
 
 		// check if we have attempts remaining.
 		if v == maxAttempts-1 {
@@ -243,7 +243,7 @@ func (r *RetryTransport) RoundTrip(z *http.Request) (*http.Response, error) {
 const MaxDrainSize = 64 * 1024 // 64 KiB
 
 // for consuming underlying TCP connection to remote node, so that http transport can reuse connection.
-func (r *RetryTransport) DrainClose(resp *http.Response) {
+func DrainClose(resp *http.Response) {
 	// resp == nil as fast path
 	if resp == nil || resp.Body == nil {
 		return
