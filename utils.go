@@ -1,39 +1,70 @@
 package crawler
 
 import (
-	"context"
+	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"golang.org/x/net/html"
 	"golang.org/x/time/rate"
 )
 
+// for OOM attack prevention, (out of memory).
+// usually to prevent parsing massive decompression bombs/endless streams.
+const maxHTMLParseSize = 10 * 1024 * 1024 // cap to 10 MB
+
 // for parsing html anchor tags
 func Extract(body io.Reader, BaseUrl string) ([]string, error) {
 	base, err := url.Parse(BaseUrl)
 	if err != nil {
-		return nil, fmt.Errorf("error parsing url: %s", BaseUrl)
+		return nil, fmt.Errorf("error parsing %s: %w", BaseUrl, err)
 	}
 
+	// map in which to hold seen urls to avoid duplicated results in links
+	seen := make(map[string]struct{})
 	var links []string
-	tokenizer := html.NewTokenizer(body)
+	limited := io.LimitReader(body, maxHTMLParseSize)
+	tokenizer := html.NewTokenizer(limited) // cap reading size
 	for {
 		tt := tokenizer.Next()
 		switch tt {
 		case html.ErrorToken:
-			return links, nil
+
+			if errors.Is(err, io.EOF) { // end of stream
+				return links, nil
+			}
 		case html.StartTagToken, html.SelfClosingTagToken:
 			token := tokenizer.Token()
-			if token.Data == "a" {
+			// DataAtom being the fast path to determine whether anchor tag exists, fallback to string comparison with token.Data
+			if token.DataAtom.String() == "a" || token.Data == "a" {
 				for _, attr := range token.Attr {
 					if attr.Key == "href" {
-						resolved, err := base.Parse(attr.Val)
-						if err == nil && (resolved.Scheme == "https" || resolved.Scheme == "http") {
-							links = append(links, resolved.String())
+						val := strings.TrimSpace(attr.Val)
+						// skip empty links and none-HTTP urls early.
+						if val == "" || strings.HasPrefix(val, "javascript:") || strings.HasPrefix(val, "mailto:") {
+							continue
+						}
+
+						resolved, err := base.Parse(BaseUrl)
+						if err != nil {
+							continue
+						}
+
+						// stripping URL fragments to avoid crawling a page more than once.
+						// eg sections#post will be stripped to sections.
+						resolved.Fragment = ""
+
+						if resolved.Scheme == "https" || resolved.Scheme == "http" {
+							link := resolved.String()
+							if _, ok := seen[link]; !ok {
+								seen[link] = struct{}{} // mark as seen
+								links = append(links, link)
+							}
 						}
 					}
 				}
@@ -42,76 +73,68 @@ func Extract(body io.Reader, BaseUrl string) ([]string, error) {
 	}
 }
 
+// strings.EqualFold() allows for RFC compliancy f
 // comparing hosts per link to avoid cross-domain recurse
 func SameHost(u1, u2 string) bool {
-	url, err1 := url.Parse(u1)
-	url2, err2 := url.Parse(u2)
+	a, err1 := url.Parse(u1)
+	b, err2 := url.Parse(u2)
 	if err1 != nil || err2 != nil {
 		return false
 	}
 
-	return url.Host == url2.Host
+	// a/b.Hostname() strips ports (if present), strings.EqualFold() for case insensivity for domain matching.
+	return strings.EqualFold(a.Hostname(), b.Hostname())
 }
 
 // limiters for each hosts
 func (c *Crawler) LimitHost(host string) *rate.Limiter {
-	c.limiterMu.Lock()
-	defer c.limiterMu.Unlock()
-	lim, ok := c.limitedHosts[host]
-	if !ok {
-		lim = rate.NewLimiter(rate.Limit(10), 10) // refill 10/per second, with bursts of 10 per concurrent gorountine
-		c.limitedHosts[host] = lim
+	// normalise before lookups
+	t := strings.ToLower(strings.TrimSpace(host))
+
+	// fast path
+	c.LimiterLock.RLock() // RLock() allows for high concurrent reads without blocking
+	lim, ok := c.LimitedHosts[t]
+	c.LimiterLock.RUnlock()
+	if ok {
+		return lim
 	}
-	return lim
+
+	// store in lookup map and return limiter
+	c.LimiterLock.Lock() // exclusive lock for write operations
+	defer c.LimiterLock.Unlock()
+
+	// double check if gorountines race here after c.limiterMu.Unlock()
+	if lim, ok := c.LimitedHosts[t]; ok {
+		return lim
+	}
+
+	c.LimitedHosts[t] = rate.NewLimiter(10, 10) // refill 10 per/sec, with bursts of 10.
+	return c.LimitedHosts[t]                    // return limiter to specificed host
 }
 
-// retry logic configurations
-type RetryTransport struct {
-	Base       http.RoundTripper
-	delay      time.Duration
-	ctx        context.Context
-	maxRetries int
+// MaxDrainSize is to limit number of bytes when draining resp.Body.
+// Also prevents draining massive payloads from HTML, which can hang for long periods.
+const MaxDrainSize = 64 * 1024 // 64 KiB
+
+// for consuming underlying TCP connection to remote node, so that http transport can reuse connection.
+func DrainClose(resp *http.Response) {
+	// resp == nil as fast path
+	if resp == nil || resp.Body == nil {
+		return
+	}
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, MaxDrainSize))
+	_ = resp.Body.Close()
 }
 
-func NewRetryClient(delay time.Duration, maxR int) *http.Client {
-	return &http.Client{
-		Transport: &RetryTransport{
-			Base: http.DefaultTransport,
-			delay: delay,
-			maxRetries: maxR,
-		},
-	}
-}
 
-func (r *RetryTransport) RoundTrip(z *http.Request) (*http.Response, error) {
-	t := r.Base
-	var lastErr error
-
-	if t == nil {
-		t = http.DefaultTransport
+// computing backoff delay (for retry.go) upon request failure with jittered duration, this avoids the "thundering herd" design flaw.
+func (r *RetryTransport) CalculateBackoffDelay(attempt int) time.Duration {
+	backoff := float64(attempt) * float64(int(1)<<attempt) // 2 ^ attempt after big left shift.
+	// verify backoff doesnt exceed r.MaxDelay
+	if r.Delay > 0 && time.Duration(backoff) > r.Delay {
+		backoff = float64(r.Delay) // fallback of r.Delay if exceeded.
 	}
 
-	for v := range r.maxRetries {
-		resp, err := t.RoundTrip(z)
-		if err == nil && resp.StatusCode < 500 {
-			return resp, nil
-		}
-
-		// clean resp body (avoiding connection leaks)
-		if err == nil {
-			defer resp.Body.Close()
-			io.Copy(io.Discard, resp.Body) // consume response body so that the underlying tcp connection can be reused by http transport.
-		}
-
-		lastErr = err
-
-		delay := time.Duration(1<<v) * r.delay
-		timer := time.NewTimer(delay)
-		select {
-		case <-timer.C:
-		case <-z.Context().Done():
-			return resp, z.Context().Err()
-		}
-	}
-	return nil, lastErr
+	jitteredV := rand.Float64() * backoff
+	return time.Duration(jitteredV)
 }

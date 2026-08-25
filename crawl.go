@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -15,33 +14,34 @@ import (
 )
 
 type Crawler struct {
-	depth int
-	wg    sync.WaitGroup
+	Client *http.Client
+	wg     sync.WaitGroup
 
-	originsLocker sync.Mutex
-	origins       map[string]bool
+	LimiterLock  sync.RWMutex
+	LimitedHosts map[string]*rate.Limiter
+
+	OriginsLock sync.Mutex
+	Origins     map[string]bool
+
+	Depth int
 
 	// optionals
-	allowCrossDomains bool
-	maxRetries        int
+	AllowCrossDomains bool
+	MaxRetries        int
 
-	sem chan struct{}
-
-	limiterMu    sync.Mutex
-	limitedHosts map[string]*rate.Limiter
-
-	client *http.Client
+	// Sem is to act as a semaphore to cap number of network requests at flight by limiting number of gorountines, (via buffered channel).
+	Sem chan struct{}
 }
 
 func NewCrawler(depth int, allowCD bool, maxR int) *Crawler {
 	return &Crawler{
-		depth:             depth,
-		maxRetries:        maxR,
-		allowCrossDomains: allowCD, // determines whether crawler can visit external links (other than child host urls)
-		origins:           make(map[string]bool),
-		sem:               make(chan struct{}, 10), // 10 requests can be made for each crawler that spawns
-		limitedHosts:      make(map[string]*rate.Limiter),
-		client:            NewRetryClient(time.Millisecond*200, 5),
+		Depth:             depth,
+		MaxRetries:        maxR,
+		AllowCrossDomains: allowCD, // determines whether crawler can visit external links (other than child host urls)
+		Origins:           make(map[string]bool),
+		Sem:               make(chan struct{}, 10), // 10 requests can be made for each crawler that spawns
+		LimitedHosts:      make(map[string]*rate.Limiter),
+		Client:            NewRetryClient(time.Millisecond*200, 5),
 	}
 }
 
@@ -62,17 +62,17 @@ func (c *Crawler) crawl(ctx context.Context, url string, depth int) error {
 	default:
 	}
 
-	if depth > c.depth {
+	if depth > c.Depth {
 		return nil
 	}
 
-	c.originsLocker.Lock()
-	if c.origins[url] {
-		c.originsLocker.Unlock()
+	c.OriginsLock.Lock()
+	if c.Origins[url] {
+		c.OriginsLock.Unlock()
 		return nil
 	}
-	c.origins[url] = true
-	c.originsLocker.Unlock()
+	c.Origins[url] = true
+	c.OriginsLock.Unlock()
 
 	fmt.Println("crawling:", url)
 
@@ -84,13 +84,13 @@ func (c *Crawler) crawl(ctx context.Context, url string, depth int) error {
 	}
 
 	select {
-	case c.sem <- struct{}{}:
+	case c.Sem <- struct{}{}:
 	case <-ctx.Done():
 		return ctx.Err()
 	}
 
 	defer func() {
-		<-c.sem
+		<-c.Sem
 	}()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -99,7 +99,7 @@ func (c *Crawler) crawl(ctx context.Context, url string, depth int) error {
 		return err
 	}
 
-	resp, err := c.client.Do(req)
+	resp, err := c.Client.Do(req)
 
 	if err != nil {
 		slog.Error("request error", "err", err)
@@ -124,11 +124,13 @@ func (c *Crawler) crawl(ctx context.Context, url string, depth int) error {
 		return err
 	}
 
-	io.Copy(io.Discard, resp.Body)
+	// DrainClose closes resp.Body while freeing its underlying TCP connection for reuse by HTTP transport.
+	// Draining before recusion to avoid socket/file descriptor leaks at high concurrent requests during crawler lifetime.
+	DrainClose(resp)
 
 	// recursive call untill max depth is exceeded.
 	for _, link := range links {
-		if !SameHost(url, link) && !c.allowCrossDomains {
+		if !SameHost(url, link) && !c.AllowCrossDomains {
 			continue // skip if not same domain origin
 		}
 		slog.Info("scoured link:", "link", link)
