@@ -1,12 +1,10 @@
 package crawler
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
 	"math/rand"
-	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -114,131 +112,6 @@ func (c *Crawler) LimitHost(host string) *rate.Limiter {
 	return c.LimitedHosts[t]                    // return limiter to specificed host
 }
 
-type RetryTransport struct {
-	Base         http.RoundTripper
-	Delay        time.Duration
-	InitialDelay time.Duration
-	MaxRetries   int
-
-	// will hold how many retries specific request status codes can do.
-	AllowedRetries map[int]int
-}
-
-func NewRetryClient(initDelay time.Duration, maxRetries int) *http.Client {
-	return &http.Client{
-		Timeout: time.Second * 30, // safeguards against hung TCP handshakes/unresponesive backends.
-		Transport: &RetryTransport{
-			Base:         http.DefaultTransport,
-			InitialDelay: initDelay,
-			Delay:        time.Second * 3,
-			AllowedRetries: map[int]int{
-				http.StatusRequestTimeout:     2, // 408
-				http.StatusTooEarly:           2, // 425
-				http.StatusMisdirectedRequest: 2, // 421
-				http.StatusTooManyRequests:    3, // 429
-				http.StatusBadGateway:         3, // 502
-				http.StatusServiceUnavailable: 3, // 503
-				http.StatusGatewayTimeout:     3, // 504
-			},
-		},
-	}
-}
-
-// Determines whether status is warrant to retries.
-func (r *RetryTransport) isRetryableStatus(status, attempt int) bool {
-	if t, ok := r.AllowedRetries[status]; ok { // is warrant to retry
-		return attempt < t
-	}
-
-	// general server-side errors
-	if status > 500 {
-		return attempt < r.MaxRetries // default to r.MaxRetries if so.
-	}
-
-	return false
-}
-
-// Determines whether error is transient to network glitch
-func (r *RetryTransport) isRetryableNetworkErr(err error) bool {
-	if err == nil {
-		return false
-	}
-
-	// check if err was caused by caller
-	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-		return false
-	}
-
-	var nErr net.Error
-	if errors.As(err, &nErr) { // caused by temporary OS network glitches and such.
-		return true
-	}
-
-	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
-		return true // caused by server abruptly closing client keep-alive socket.
-	}
-
-	return false
-}
-
-func (r *RetryTransport) RoundTrip(z *http.Request) (*http.Response, error) {
-	t := r.Base
-	if t == nil {
-		t = http.DefaultTransport
-	}
-
-	var (
-		maxAttempts = r.MaxRetries + 1 // MaxRetries must exclude initial request
-		lastResp    *http.Response
-		lastErr     error
-	)
-
-	for v := range r.MaxRetries {
-		// verify context deadline/cancellation before proceeding to network call
-		if err := z.Context().Err(); err != nil {
-			return nil, z.Context().Err()
-		}
-
-		resp, err := t.RoundTrip(z)
-		lastErr = err
-
-		if err == nil {
-			// if succesfully, return immediately after making sure it isnt an retryable status.
-			if !r.isRetryableStatus(resp.StatusCode, v) {
-				return resp, nil
-			}
-			lastResp = resp
-		} else {
-			// check if is isnt an transient network error and if there are attempts remaining.
-			if !r.isRetryableNetworkErr(err) || v <= maxAttempts-1 { // -1 as we added 1 initially for first request.
-				return nil, err
-			}
-			lastErr = err
-		}
-
-		lastResp = nil
-		DrainClose(resp) // drain response body.
-
-		// check if we have attempts remaining.
-		if v == maxAttempts-1 {
-			break // exit loop and return results
-		}
-
-		delay := r.calculateBackoffDelay(v)
-		timer := time.NewTimer(delay)
-		select {
-		case <-timer.C:
-		case <-z.Context().Done():
-			return nil, z.Context().Err()
-		}
-	}
-
-	if lastErr != nil {
-		return nil, lastErr
-	}
-	return lastResp, nil
-}
-
 // MaxDrainSize is to limit number of bytes when draining resp.Body.
 // Also prevents draining massive payloads from HTML, which can hang for long periods.
 const MaxDrainSize = 64 * 1024 // 64 KiB
@@ -253,8 +126,9 @@ func DrainClose(resp *http.Response) {
 	_ = resp.Body.Close()
 }
 
-// for calculating backoff delay upon request failure with jittered duration, this avoids the "thundering herd" design flaw.
-func (r *RetryTransport) calculateBackoffDelay(attempt int) time.Duration {
+
+// computing backoff delay (for retry.go) upon request failure with jittered duration, this avoids the "thundering herd" design flaw.
+func (r *RetryTransport) CalculateBackoffDelay(attempt int) time.Duration {
 	backoff := float64(attempt) * float64(int(1)<<attempt) // 2 ^ attempt after big left shift.
 	// verify backoff doesnt exceed r.MaxDelay
 	if r.Delay > 0 && time.Duration(backoff) > r.Delay {
