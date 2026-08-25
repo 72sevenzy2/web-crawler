@@ -1,12 +1,12 @@
 package crawler
 
 import (
-	"io"
-	"errors"
-	"net/http"
-	"net"
-	"time"
 	"context"
+	"errors"
+	"io"
+	"net"
+	"net/http"
+	"time"
 )
 
 func NewRetryClient(initDelay time.Duration, maxRetries int) *http.Client {
@@ -15,6 +15,7 @@ func NewRetryClient(initDelay time.Duration, maxRetries int) *http.Client {
 		Transport: &RetryTransport{
 			Base:         http.DefaultTransport,
 			InitialDelay: initDelay,
+			MaxRetries:   10,
 			Delay:        time.Second * 3,
 			AllowedRetries: map[int]int{
 				http.StatusRequestTimeout:     2, // 408

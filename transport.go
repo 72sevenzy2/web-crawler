@@ -27,7 +27,7 @@ func (r *RetryTransport) RoundTrip(z *http.Request) (*http.Response, error) {
 		lastErr     error
 	)
 
-	for v := range r.MaxRetries {
+	for v := range maxAttempts {
 		// verify context deadline/cancellation before proceeding to network call
 		if err := z.Context().Err(); err != nil {
 			return nil, z.Context().Err()
@@ -44,18 +44,21 @@ func (r *RetryTransport) RoundTrip(z *http.Request) (*http.Response, error) {
 			lastResp = resp
 		} else {
 			// check if is isnt an transient network error and if there are attempts remaining.
-			if !r.IsRetryableNetErr(err) || v <= maxAttempts-1 { // -1 as we added 1 initially for first request.
-				return nil, err
+			if !r.IsRetryableNetErr(err) || v == maxAttempts-1 { // -1 as we added 1 initially for first request.
+				return resp, err
 			}
 			lastErr = err
 		}
 
-		lastResp = nil
-		DrainClose(resp) // drain response body.
+		lastResp = resp
 
 		// check if we have attempts remaining.
 		if v == maxAttempts-1 {
-			break // exit loop and return results
+			break
+		} else {
+			// if we have more attempts then drain previous requests resp.Body to avoid file descriptor/socket leaks.
+			// at out final requst, we'ed break and return resp and drain via DrainClose() in crawl.go.
+			DrainClose(resp) // doing so before reaching the next attempt.
 		}
 
 		delay := r.CalculateBackoffDelay(v)
