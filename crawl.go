@@ -62,6 +62,12 @@ func (c *Crawler) crawl(ctx context.Context, url string, depth int) error {
 	default:
 	}
 
+	// validate url initially
+	base, err := IsValidLink(url)
+	if err != nil {
+		return err
+	}
+
 	if depth > c.Depth {
 		return nil
 	}
@@ -106,20 +112,18 @@ func (c *Crawler) crawl(ctx context.Context, url string, depth int) error {
 		return err
 	}
 
-	defer resp.Body.Close()
-
 	if resp.StatusCode != http.StatusOK {
 		return nil
 	}
 
+	// avoids parsing pages with non-html contents for Extract()
 	cType := resp.Header.Get("Content-Type")
-
 	if !strings.Contains(cType, "text/html") {
 		slog.Error("invalid header", "found", errors.New(cType))
 		return nil // expected
 	}
 
-	links, err := Extract(resp.Body, url)
+	links, err := Extract(resp.Body, base)
 	if err != nil {
 		return err
 	}
@@ -130,15 +134,17 @@ func (c *Crawler) crawl(ctx context.Context, url string, depth int) error {
 
 	// recursive call untill max depth is exceeded.
 	for _, link := range links {
-		if !SameHost(url, link) && !c.AllowCrossDomains {
+		l := link // explicitly defining each loop variable.
+
+		if !SameHost(url, l) && !c.AllowCrossDomains {
 			continue // skip if not same domain origin
 		}
-		slog.Info("scoured link:", "link", link)
+		slog.Info("scoured link:", "link", l)
 		c.wg.Add(1)
 		go func(l string) {
 			defer c.wg.Done()
 			c.crawl(ctx, l, depth+1)
-		}(link)
+		}(l)
 	}
 
 	return nil

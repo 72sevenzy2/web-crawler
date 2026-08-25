@@ -2,7 +2,6 @@ package crawler
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"math/rand"
 	"net/http"
@@ -19,12 +18,7 @@ import (
 const maxHTMLParseSize = 10 * 1024 * 1024 // cap to 10 MB
 
 // for parsing html anchor tags
-func Extract(body io.Reader, BaseUrl string) ([]string, error) {
-	base, err := url.Parse(BaseUrl)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing %s: %w", BaseUrl, err)
-	}
-
+func Extract(body io.Reader, baseURL *url.URL) ([]string, error) {
 	// map in which to hold seen urls to avoid duplicated results in links
 	seen := make(map[string]struct{})
 	var links []string
@@ -34,8 +28,7 @@ func Extract(body io.Reader, BaseUrl string) ([]string, error) {
 		tt := tokenizer.Next()
 		switch tt {
 		case html.ErrorToken:
-
-			if errors.Is(err, io.EOF) { // end of stream
+			if errors.Is(tokenizer.Err(), io.EOF) { // end of stream
 				return links, nil
 			}
 		case html.StartTagToken, html.SelfClosingTagToken:
@@ -50,7 +43,7 @@ func Extract(body io.Reader, BaseUrl string) ([]string, error) {
 							continue
 						}
 
-						resolved, err := base.Parse(BaseUrl)
+						resolved, err := baseURL.Parse(val)
 						if err != nil {
 							continue
 						}
@@ -62,7 +55,7 @@ func Extract(body io.Reader, BaseUrl string) ([]string, error) {
 						if resolved.Scheme == "https" || resolved.Scheme == "http" {
 							link := resolved.String()
 							if _, ok := seen[link]; !ok {
-								seen[link] = struct{}{} // mark as seen
+								seen[link] = struct{}{}
 								links = append(links, link)
 							}
 						}
@@ -126,7 +119,6 @@ func DrainClose(resp *http.Response) {
 	_ = resp.Body.Close()
 }
 
-
 // computing backoff delay (for retry.go) upon request failure with jittered duration, this avoids the "thundering herd" design flaw.
 func (r *RetryTransport) CalculateBackoffDelay(attempt int) time.Duration {
 	backoff := float64(attempt) * float64(int(1)<<attempt) // 2 ^ attempt after big left shift.
@@ -137,4 +129,12 @@ func (r *RetryTransport) CalculateBackoffDelay(attempt int) time.Duration {
 
 	jitteredV := rand.Float64() * backoff
 	return time.Duration(jitteredV)
+}
+
+func IsValidLink(l string) (*url.URL, error) {
+	base, err := url.Parse(l)
+	if err != nil {
+		return nil, err // invalid url
+	}
+	return base, nil
 }
