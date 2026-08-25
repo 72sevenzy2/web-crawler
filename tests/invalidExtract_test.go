@@ -13,10 +13,13 @@ func TestInvalidExtractBody(t *testing.T) {
 	links, err := crawler.Extract(input,  "https://jsonplaceholder.typicode.com/guide/")
 	if err != nil {
 		t.Fatalf("encountered: %s", err.Error())
+		t.Log(err)
 		return
 	}
 
-	for _, link := range links { // not to reach
-		t.Log(link)
+	if len(links) == 0 {
+		t.Log("passed")
+		return
 	}
+
 }
