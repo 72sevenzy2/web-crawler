@@ -11,6 +11,51 @@ import (
 	"time"
 )
 
+// MetricsTransport represents the final transport layer between the crawler's request and the actual website, for logging the requests methodology.
+type MetricsTransport struct {
+	Base    http.RoundTripper
+	Metrics MetricsRecorder
+
+	logger *slog.Logger
+}
+
+func NewMetricsTransport() *MetricsTransport {
+	return &MetricsTransport{
+		Base:    http.DefaultTransport,
+		Metrics: *NewMetricsRecorder(),
+		logger:  slog.Default(),
+	}
+}
+
+func (m *MetricsTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	// verify context state before network call.
+	select {
+	case <-r.Context().Done():
+		return nil, r.Context().Err()
+	default:
+	}
+
+	b := m.Base
+	if b == nil {
+		b = http.DefaultTransport
+	}
+	//metricsDetails := NewMetricsRecorder()
+
+	start := time.Now()
+	resp, err := b.RoundTrip(r)
+	end := time.Since(start)
+	if err != nil {
+		return nil, err
+	}
+
+	// recording request metrics details to metricsDetails
+	m.Metrics.ObserveRequest(r.URL.Hostname(), err, resp.StatusCode, end)
+
+	m.logger.Info("Request Metrics", "metrics_count", m.Metrics.MetricsInfoCount, "host_name", m.Metrics.RequestHost, "errors_encountered", m.Metrics.RequestErrorCount, "latency", m.Metrics.RequestDuration, "status_frequency", m.Metrics.RequestStatus[resp.StatusCode])
+
+	return resp, nil
+}
+
 type RequestLog struct {
 	RequestBody       io.Reader
 	RequestStatus     string
@@ -31,6 +76,7 @@ func (r *RequestLogRec) Add(log *RequestLog) {
 	r.mu.Unlock()
 }
 
+// All() is called by the caller to fetch stored request logs via []RequestLog.
 func (r *RequestLogRec) All() []*RequestLog {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -66,6 +112,12 @@ const (
 )
 
 func (t *LoggerTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	select {
+	case <-r.Context().Done():
+		return nil, r.Context().Err()
+	default:
+	}
+
 	b := t.Base
 	if b == nil { // prevents detouring to nil Transport layer, if nil then defaulting to http's defaultTransport
 		b = http.DefaultTransport
