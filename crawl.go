@@ -3,7 +3,6 @@ package crawler
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -120,7 +119,6 @@ func (c *Crawler) crawl(ctx context.Context, url string, depth int) error {
 	// avoids parsing pages with non-html contents for Extract()
 	cType := resp.Header.Get("Content-Type")
 	if !strings.Contains(cType, "text/html") {
-		slog.Error("invalid header", "found", errors.New(cType))
 		return nil // expected
 	}
 
