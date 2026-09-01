@@ -1,36 +1,36 @@
-crawling: http://127.0.0.1:63261
-2026/09/01 18:45:51 INFO Request Metrics metrics_count=1 host_name=127.0.0.1 errors_encountered=0 latency=1.1894ms status_frequency=1
+crawling: http://127.0.0.1:54075
+2026/09/01 19:27:35 INFO Request Metrics metrics_count=1 host_name=127.0.0.1 errors_encountered=0 latency=611µs status_frequency=1
 goos: windows
 goarch: amd64
 pkg: github.com/72sevenzy2/web-crawler/benchmarks
 cpu: 11th Gen Intel(R) Core(TM) i5-1135G7 @ 2.40GHz
-BenchmarkCrawling-8   	  970525	      1223 ns/op
-BenchmarkCrawling-8   	crawling: http://127.0.0.1:63263
-2026/09/01 18:45:52 INFO Request Metrics metrics_count=1 host_name=127.0.0.1 errors_encountered=0 latency=0s status_frequency=1
- 1000000	      1233 ns/op
-BenchmarkCrawling-8   	crawling: http://127.0.0.1:63265
-2026/09/01 18:45:53 INFO Request Metrics metrics_count=1 host_name=127.0.0.1 errors_encountered=0 latency=0s status_frequency=1
-  924220	      1518 ns/op
-BenchmarkCrawling-8   	crawling: http://127.0.0.1:50683
-2026/09/01 18:45:55 INFO Request Metrics metrics_count=1 host_name=127.0.0.1 errors_encountered=0 latency=0s status_frequency=1
-  676528	      1702 ns/op
-BenchmarkCrawling-8   	crawling: http://127.0.0.1:50685
-2026/09/01 18:45:56 INFO Request Metrics metrics_count=1 host_name=127.0.0.1 errors_encountered=0 latency=0s status_frequency=1
-  687619	      1718 ns/op
-BenchmarkCrawling-8   	crawling: http://127.0.0.1:50687
-2026/09/01 18:45:57 INFO Request Metrics metrics_count=1 host_name=127.0.0.1 errors_encountered=0 latency=998.7µs status_frequency=1
-  711018	      1682 ns/op
-BenchmarkCrawling-8   	crawling: http://127.0.0.1:50689
-2026/09/01 18:45:58 INFO Request Metrics metrics_count=1 host_name=127.0.0.1 errors_encountered=0 latency=0s status_frequency=1
-  679828	      1696 ns/op
-BenchmarkCrawling-8   	crawling: http://127.0.0.1:50691
-2026/09/01 18:45:59 INFO Request Metrics metrics_count=1 host_name=127.0.0.1 errors_encountered=0 latency=0s status_frequency=1
-  724440	      1671 ns/op
-BenchmarkCrawling-8   	crawling: http://127.0.0.1:50693
-2026/09/01 18:46:00 INFO Request Metrics metrics_count=1 host_name=127.0.0.1 errors_encountered=0 latency=1.0006ms status_frequency=1
-  746476	      1709 ns/op
-BenchmarkCrawling-8   	crawling: http://127.0.0.1:50695
-2026/09/01 18:46:02 INFO Request Metrics metrics_count=1 host_name=127.0.0.1 errors_encountered=0 latency=1.0242ms status_frequency=1
-  683253	      1704 ns/op
+BenchmarkCrawling-8   	 1565634	       772.9 ns/op
+BenchmarkCrawling-8   	crawling: http://127.0.0.1:54077
+2026/09/01 19:27:36 INFO Request Metrics metrics_count=1 host_name=127.0.0.1 errors_encountered=0 latency=0s status_frequency=1
+ 1517404	       793.3 ns/op
+BenchmarkCrawling-8   	crawling: http://127.0.0.1:54079
+2026/09/01 19:27:37 INFO Request Metrics metrics_count=1 host_name=127.0.0.1 errors_encountered=0 latency=0s status_frequency=1
+ 1564576	       765.6 ns/op
+BenchmarkCrawling-8   	crawling: http://127.0.0.1:54081
+2026/09/01 19:27:39 INFO Request Metrics metrics_count=1 host_name=127.0.0.1 errors_encountered=0 latency=0s status_frequency=1
+ 1575000	       759.3 ns/op
+BenchmarkCrawling-8   	crawling: http://127.0.0.1:54083
+2026/09/01 19:27:40 INFO Request Metrics metrics_count=1 host_name=127.0.0.1 errors_encountered=0 latency=0s status_frequency=1
+ 1561449	       766.0 ns/op
+BenchmarkCrawling-8   	crawling: http://127.0.0.1:54085
+2026/09/01 19:27:41 INFO Request Metrics metrics_count=1 host_name=127.0.0.1 errors_encountered=0 latency=0s status_frequency=1
+ 1359715	       921.4 ns/op
+BenchmarkCrawling-8   	crawling: http://127.0.0.1:54087
+2026/09/01 19:27:42 INFO Request Metrics metrics_count=1 host_name=127.0.0.1 errors_encountered=0 latency=1.5294ms status_frequency=1
+ 1101468	      1083 ns/op
+BenchmarkCrawling-8   	crawling: http://127.0.0.1:54089
+2026/09/01 19:27:43 INFO Request Metrics metrics_count=1 host_name=127.0.0.1 errors_encountered=0 latency=0s status_frequency=1
+ 1116754	      1090 ns/op
+BenchmarkCrawling-8   	crawling: http://127.0.0.1:54091
+2026/09/01 19:27:45 INFO Request Metrics metrics_count=1 host_name=127.0.0.1 errors_encountered=0 latency=971.9µs status_frequency=1
+  949636	      1085 ns/op
+BenchmarkCrawling-8   	crawling: http://127.0.0.1:54093
+2026/09/01 19:27:46 INFO Request Metrics metrics_count=1 host_name=127.0.0.1 errors_encountered=0 latency=1.0341ms status_frequency=1
+ 1000000	      1064 ns/op
 PASS
-ok  	github.com/72sevenzy2/web-crawler/benchmarks	12.438s
+ok  	github.com/72sevenzy2/web-crawler/benchmarks	12.050s
