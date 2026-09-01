@@ -43,7 +43,7 @@ func Extract(body io.Reader, baseURL *url.URL) ([]string, error) {
 							continue
 						}
 
-						resolved, err := baseURL.Parse(val)
+						resolved, err := baseURL.Parse(attr.Val)
 						if err != nil {
 							continue
 						}
@@ -69,8 +69,8 @@ func Extract(body io.Reader, baseURL *url.URL) ([]string, error) {
 // strings.EqualFold() allows for RFC compliancy f
 // comparing hosts per link to avoid cross-domain recurse
 func SameHost(u1, u2 string) bool {
-	a, err1 := url.Parse(u1)
-	b, err2 := url.Parse(u2)
+	a, err1 := url.ParseRequestURI(u1)
+	b, err2 := url.ParseRequestURI(u2)
 	if err1 != nil || err2 != nil {
 		return false
 	}
@@ -132,7 +132,7 @@ func (r *RetryTransport) CalculateBackoffDelay(attempt int) time.Duration {
 }
 
 func IsValidLink(l string) (*url.URL, error) {
-	base, err := url.Parse(l)
+	base, err := url.ParseRequestURI(l)
 	if err != nil {
 		return nil, err // invalid url
 	}
