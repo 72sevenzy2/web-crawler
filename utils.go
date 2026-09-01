@@ -66,17 +66,34 @@ func Extract(body io.Reader, baseURL *url.URL) ([]string, error) {
 	}
 }
 
-// strings.EqualFold() allows for RFC compliancy f
+// strings.EqualFold() allows case insensitive matching which follow RFC 9110 stating so.
 // comparing hosts per link to avoid cross-domain recurse
-func SameHost(u1, u2 string) bool {
-	a, err1 := url.ParseRequestURI(u1)
-	b, err2 := url.ParseRequestURI(u2)
-	if err1 != nil || err2 != nil {
-		return false
+func SameHost(u2 *url.URL, u1 string) bool {
+	b := ExtractHost(u1)
+	return strings.EqualFold(u2.Hostname(), b)
+}
+
+// ExtractHost extracts a links host, avoiding url.Parse()'s high overhead for full RFC 3986 parsing requirements.
+func ExtractHost(link string) string {
+	// strip Scheme
+	if i := strings.Index(link, "://"); i >= 0 {
+		link = link[:i]
 	}
 
-	// a/b.Hostname() strips ports (if present), strings.EqualFold() for case insensivity for domain matching.
-	return strings.EqualFold(a.Hostname(), b.Hostname())
+	// strip query/paths
+	end := len(link) // assuming our link has no querie/paths before running.
+	for _, s := range []byte{ '/', '?', '#' } {
+		if i := strings.IndexByte(link, s); i < end && i >= 0 {
+			end = i // update at each s occurence until the last one.
+		}
+	}
+	link = link[:end]
+
+	// strip ports (if included)
+	if i := strings.Index(link, ":"); i >= 0 {
+		link = link[:i]
+	}
+	return link
 }
 
 // limiters for each hosts

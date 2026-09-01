@@ -62,6 +62,15 @@ func (c *Crawler) crawl(ctx context.Context, url string, depth int) error {
 	default:
 	}
 
+	// checks for duplicated urls before IsValidLink() computation.
+	c.OriginsLock.Lock()
+	if c.Origins[url] {
+		c.OriginsLock.Unlock()
+		return nil
+	}
+	c.Origins[url] = true
+	c.OriginsLock.Unlock()
+
 	// validate url initially
 	base, err := IsValidLink(url)
 	if err != nil {
@@ -71,14 +80,6 @@ func (c *Crawler) crawl(ctx context.Context, url string, depth int) error {
 	if depth > c.Depth {
 		return nil
 	}
-
-	c.OriginsLock.Lock()
-	if c.Origins[url] {
-		c.OriginsLock.Unlock()
-		return nil
-	}
-	c.Origins[url] = true
-	c.OriginsLock.Unlock()
 
 	fmt.Println("crawling:", url)
 
@@ -135,7 +136,8 @@ func (c *Crawler) crawl(ctx context.Context, url string, depth int) error {
 	for _, link := range links {
 		l := link // explicitly defining each loop variable.
 
-		if !SameHost(url, l) && !c.AllowCrossDomains {
+		// SameHost reuses the previously computed base to avoid computing host names for 2 urls at every cycle.
+		if !SameHost(base, l) && !c.AllowCrossDomains {
 			continue // skip if not same domain origin
 		}
 		slog.Info("scoured link:", "link", l)
