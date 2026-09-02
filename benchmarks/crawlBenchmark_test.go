@@ -18,6 +18,6 @@ func BenchmarkCrawling(t *testing.B) {
 
 	t.ResetTimer()
 	for t.Loop() {
-		c.Start(context.Background(), server.URL, 0)
+		c.Start(context.Background(), server.URL)
 	}
 }

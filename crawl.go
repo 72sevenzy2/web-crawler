@@ -46,9 +46,9 @@ func NewCrawler(depth int, allowCD bool, maxR int) *Crawler {
 	}
 }
 
-func (c *Crawler) Start(ctx context.Context, url string, startDepth int) {
+func (c *Crawler) Start(ctx context.Context, url string) {
 	c.wg.Go(func() { // auto increments wg counter and decrements after completion.
-		err := c.crawl(ctx, url, startDepth)
+		err := c.crawl(ctx, url, c.Depth)
 		if err != nil {
 			c.Logger.Error("encountered crawl error", "err", err)
 		}

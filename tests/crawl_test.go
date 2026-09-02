@@ -15,5 +15,5 @@ func TestCrawler(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute * 10)
 	defer cancel()
-	c.Start(ctx, "https://jsonplaceholder.typicode.com/guide/", 0)
+	c.Start(ctx, "https://jsonplaceholder.typicode.com/guide/")
 }
