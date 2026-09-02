@@ -2,7 +2,6 @@ package crawler
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -23,7 +22,8 @@ type Crawler struct {
 	OriginsLock sync.Mutex
 	Origins     map[string]bool
 
-	Depth int
+	Depth  int
+	Logger slog.Logger
 
 	// optionals
 	AllowCrossDomains bool
@@ -36,6 +36,7 @@ type Crawler struct {
 func NewCrawler(depth int, allowCD bool, maxR int) *Crawler {
 	return &Crawler{
 		Depth:             depth,
+		Logger:            *slog.Default(),
 		MaxRetries:        maxR,
 		AllowCrossDomains: allowCD, // determines whether crawler can visit external links (other than child host urls)
 		Origins:           make(map[string]bool),
@@ -49,7 +50,7 @@ func (c *Crawler) Start(ctx context.Context, url string, startDepth int) {
 	c.wg.Go(func() { // auto increments wg counter and decrements after completion.
 		err := c.crawl(ctx, url, startDepth)
 		if err != nil {
-			slog.Error("encountered crawl error", "err", err)
+			c.Logger.Error("encountered crawl error", "err", err)
 		}
 	})
 	c.wg.Wait()
@@ -62,6 +63,15 @@ func (c *Crawler) crawl(ctx context.Context, url string, depth int) error {
 	default:
 	}
 
+	// checks for duplicated urls before IsValidLink() computation.
+	c.OriginsLock.Lock()
+	if c.Origins[url] {
+		c.OriginsLock.Unlock()
+		return nil
+	}
+	c.Origins[url] = true
+	c.OriginsLock.Unlock()
+
 	// validate url initially
 	base, err := IsValidLink(url)
 	if err != nil {
@@ -72,20 +82,12 @@ func (c *Crawler) crawl(ctx context.Context, url string, depth int) error {
 		return nil
 	}
 
-	c.OriginsLock.Lock()
-	if c.Origins[url] {
-		c.OriginsLock.Unlock()
-		return nil
-	}
-	c.Origins[url] = true
-	c.OriginsLock.Unlock()
-
 	fmt.Println("crawling:", url)
 
 	// claim token before acquiring a slot via semaphore.
 	limiter := c.LimitHost(url)
 	if err := limiter.Wait(ctx); err != nil {
-		slog.Error("encountered", "rate limiting err", err)
+		c.Logger.Error("encountered", "rate limiting err", err)
 		return nil // expected error so not flagged here.
 	}
 
@@ -101,14 +103,14 @@ func (c *Crawler) crawl(ctx context.Context, url string, depth int) error {
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		slog.Error("request initialization error", "err", err)
+		c.Logger.Error("request initialization error", "err", err)
 		return err
 	}
 
 	resp, err := c.Client.Do(req)
 
 	if err != nil {
-		slog.Error("request error", "err", err)
+		c.Logger.Error("request error", "err", err)
 		return err
 	}
 
@@ -119,7 +121,6 @@ func (c *Crawler) crawl(ctx context.Context, url string, depth int) error {
 	// avoids parsing pages with non-html contents for Extract()
 	cType := resp.Header.Get("Content-Type")
 	if !strings.Contains(cType, "text/html") {
-		slog.Error("invalid header", "found", errors.New(cType))
 		return nil // expected
 	}
 
@@ -136,10 +137,11 @@ func (c *Crawler) crawl(ctx context.Context, url string, depth int) error {
 	for _, link := range links {
 		l := link // explicitly defining each loop variable.
 
-		if !SameHost(url, l) && !c.AllowCrossDomains {
+		// SameHost reuses the previously computed base to avoid computing host names for 2 urls at every cycle.
+		if !SameHost(base, l) && !c.AllowCrossDomains {
 			continue // skip if not same domain origin
 		}
-		slog.Info("scoured link:", "link", l)
+		c.Logger.Info("scoured link:", "link", l)
 		c.wg.Add(1)
 		go func(l string) {
 			defer c.wg.Done()
