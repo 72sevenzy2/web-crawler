@@ -3,7 +3,7 @@ package crawler
 import (
 	"bytes"
 	"context"
-	"fmt"
+	"errors"
 	"io"
 	"net/http"
 	"sync"
@@ -58,6 +58,8 @@ const (
 	InitialReadingSize = 128 * 1024 * 1024 // 124 MiB
 )
 
+var LoggerRequestErr = errors.New("encountered request error on loggerTransport.")
+
 func (t *LoggerTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	select {
 	case <-r.Context().Done():
@@ -78,7 +80,7 @@ func (t *LoggerTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 		if hasRecs {
 			recs.Add(&RequestLog{Err: err})
 		}
-		return nil, fmt.Errorf("encountered err: %w", err)
+		return nil, LoggerRequestErr
 	}
 
 	if !hasRecs {
