@@ -19,15 +19,14 @@ func main() {
 	scanner := bufio.NewScanner(os.Stdin)
 	for {
 		fmt.Print("> ")
-		safe := scanner.Scan()
-		if !safe {
+		if safe := scanner.Scan(); !safe {
 			if err := scanner.Err(); err != nil {
 				fmt.Println("err:", err.Error())
 			}
 			break
 		}
-		parts := strings.Fields(scanner.Text())
 
+		parts := strings.Fields(scanner.Text())
 		switch strings.ToLower(parts[0]) {
 		case "crawl":
 			if len(parts) < 2 {
