@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"flag"
 	"fmt"
 	"os"
 	"strings"
@@ -11,10 +12,13 @@ import (
 )
 
 func main() {
-	c := crawler.NewCrawler(10, true, 5)
+	d := flag.Int("depth", 10, "-depth <int>")
+	r := flag.Int("retries", 5, "-retries <int>")
+	t := flag.Bool("cross-domains", true, "-cross-domains <bool>")
+	c := crawler.NewCrawler(*d, *t, *r)
 	scanner := bufio.NewScanner(os.Stdin)
 	for {
-		fmt.Print(">")
+		fmt.Print("> ")
 		safe := scanner.Scan()
 		if !safe {
 			if err := scanner.Err(); err != nil {
@@ -32,6 +36,9 @@ func main() {
 			}
 
 			c.Start(context.Background(), parts[1])
+		default:
+			fmt.Println("invalid command")
+			continue
 		}
 	}
 }
