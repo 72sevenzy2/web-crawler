@@ -11,6 +11,7 @@ import (
 	"github.com/72sevenzy2/web-crawler"
 )
 
+// small cli for crawler-use
 func main() {
 	d := flag.Int("depth", 10, "-depth <int>")
 	r := flag.Int("retries", 5, "-retries <int>")

@@ -6,7 +6,9 @@
 <h4>-fast, about <4000 nanoseconds time at each crawl. (see benchmarks/results.txt)</h4>
 <h4>-retries failed attempts on hosts based on transient or non-transient errors.</h4>
 <h4>-configurable options such as maximum depth the crawler is allowed to traverse through, and whether it can traverse external/non-host related domains.</h4>
-
+<br>
+<h1 align="center">instillation:</h1>
+<code align="center">go get github.com/72sevenzy2/web-crawler<code>
 <br>
 <h1 align="center">usage:</h1>
   
@@ -16,7 +18,7 @@
   import (
       "context"
       "time"
-    	"github.com/72sevenzy2/web-crawler"
+        "github.com/72sevenzy2/web-crawler"
   )
 
   func main() {
@@ -34,3 +36,7 @@
     */
   }
   ```
+
+  <br>
+<h1 align="center">cli usage:</h1>
+
