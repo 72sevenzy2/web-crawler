@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"mime"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -120,7 +120,11 @@ func (c *Crawler) crawl(ctx context.Context, url string, depth int) error {
 
 	// avoids parsing pages with non-html contents for Extract()
 	cType := resp.Header.Get("Content-Type")
-	if !strings.Contains(cType, "text/html") {
+	mediaType, _, err := mime.ParseMediaType(cType)
+	if err != nil {
+		c.Logger.Error("malformed header", "header", mediaType)
+	}
+	if mediaType != "text/html" {
 		return nil // expected
 	}
 
