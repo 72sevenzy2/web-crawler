@@ -36,6 +36,9 @@ func main() {
 			}
 
 			c.Start(context.Background(), parts[1])
+		case "exit":
+			fmt.Println("exited")
+			return
 		default:
 			fmt.Println("invalid command")
 			continue
