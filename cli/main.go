@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/72sevenzy2/web-crawler"
 )
@@ -18,6 +19,8 @@ func main() {
 	t := flag.Bool("cross-domains", true, "-cross-domains <bool>")
 	c := crawler.NewCrawler(*d, *t, *r)
 	scanner := bufio.NewScanner(os.Stdin)
+
+	var wg sync.WaitGroup // synchronising running in-flight requests via spam cmd.
 	for {
 		fmt.Print("> ")
 		if safe := scanner.Scan(); !safe {
@@ -39,6 +42,16 @@ func main() {
 		case "exit":
 			fmt.Println("exited")
 			return
+		case "spam":
+			for range *d {
+				b := crawler.NewCrawler(*d, *t, *r)
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					b.Start(context.Background(), parts[1])
+				}()
+			}
+			wg.Wait()
 		default:
 			fmt.Println("invalid command")
 			continue
