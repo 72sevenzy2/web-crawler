@@ -82,7 +82,7 @@ func ExtractHost(link string) string {
 
 	// strip query/paths
 	end := len(link) // assuming our link has no querie/paths before running.
-	for _, s := range []byte{ '/', '?', '#' } {
+	for _, s := range []byte{'/', '?', '#'} {
 		if i := strings.IndexByte(link, s); i < end && i >= 0 {
 			end = i // update at each s occurence until the last one.
 		}
@@ -126,9 +126,9 @@ func (c *Crawler) LimitHost(host string) *rate.Limiter {
 // Also prevents draining massive payloads from HTML, which can hang for long periods.
 const MaxDrainSize = 64 * 1024 // 64 KiB
 
-// for consuming underlying TCP connection to remote node, so that http transport can reuse connection.
+// for draining underlying TCP connection from remote node, so that the http transport can reuse connection whilst eliminating need for seperate TLS handshake for similar network calls.
 func DrainClose(resp *http.Response) {
-	// resp == nil as fast path
+	// protecting against nil response panics.
 	if resp == nil || resp.Body == nil {
 		return
 	}
