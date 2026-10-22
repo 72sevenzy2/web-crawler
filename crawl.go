@@ -2,7 +2,6 @@ package crawler
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"mime"
 	"net/http"
@@ -51,6 +50,7 @@ func (c *Crawler) Start(ctx context.Context, url string) {
 		err := c.crawl(ctx, url, c.Depth)
 		if err != nil {
 			c.Logger.Error("encountered crawl error", "err", err)
+			return
 		}
 	})
 	c.wg.Wait()
@@ -82,7 +82,7 @@ func (c *Crawler) crawl(ctx context.Context, url string, depth int) error {
 		return nil
 	}
 
-	fmt.Println("crawling:", url)
+	slog.Info("crawling", "url", url)
 
 	// claim token before acquiring a slot via semaphore.
 	limiter := c.LimitHost(url)
