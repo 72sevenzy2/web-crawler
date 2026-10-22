@@ -1,36 +1,26 @@
-crawling: http://127.0.0.1:53991
-2026/09/02 18:29:34 INFO Request Metrics metrics_count=1 host_name=127.0.0.1 errors_encountered=0 latency=1.7242ms status_frequency=1
 goos: windows
 goarch: amd64
 pkg: github.com/72sevenzy2/web-crawler/benchmarks
 cpu: 11th Gen Intel(R) Core(TM) i5-1135G7 @ 2.40GHz
-BenchmarkCrawling-8   	 1037024	      1150 ns/op	      72 B/op	       2 allocs/op
-BenchmarkCrawling-8   	crawling: http://127.0.0.1:53993
-2026/09/02 18:29:36 INFO Request Metrics metrics_count=1 host_name=127.0.0.1 errors_encountered=0 latency=1.0002ms status_frequency=1
-  994792	      1151 ns/op	      72 B/op	       2 allocs/op
-BenchmarkCrawling-8   	crawling: http://127.0.0.1:53995
-2026/09/02 18:29:37 INFO Request Metrics metrics_count=1 host_name=127.0.0.1 errors_encountered=0 latency=0s status_frequency=1
- 1000000	      2758 ns/op	      72 B/op	       2 allocs/op
-BenchmarkCrawling-8   	crawling: http://127.0.0.1:57879
-2026/09/02 18:29:39 INFO Request Metrics metrics_count=1 host_name=127.0.0.1 errors_encountered=0 latency=2.0079ms status_frequency=1
-  341479	      3649 ns/op	      72 B/op	       2 allocs/op
-BenchmarkCrawling-8   	crawling: http://127.0.0.1:57881
-2026/09/02 18:29:41 INFO Request Metrics metrics_count=1 host_name=127.0.0.1 errors_encountered=0 latency=1.0033ms status_frequency=1
-  311340	      3902 ns/op	      72 B/op	       2 allocs/op
-BenchmarkCrawling-8   	crawling: http://127.0.0.1:57883
-2026/09/02 18:29:42 INFO Request Metrics metrics_count=1 host_name=127.0.0.1 errors_encountered=0 latency=991.4µs status_frequency=1
-  288061	      3819 ns/op	      72 B/op	       2 allocs/op
-BenchmarkCrawling-8   	crawling: http://127.0.0.1:57885
-2026/09/02 18:29:43 INFO Request Metrics metrics_count=1 host_name=127.0.0.1 errors_encountered=0 latency=1.0125ms status_frequency=1
-  306339	      3419 ns/op	      72 B/op	       2 allocs/op
-BenchmarkCrawling-8   	crawling: http://127.0.0.1:57887
-2026/09/02 18:29:44 INFO Request Metrics metrics_count=1 host_name=127.0.0.1 errors_encountered=0 latency=1.0142ms status_frequency=1
-  340497	      3512 ns/op	      72 B/op	       2 allocs/op
-BenchmarkCrawling-8   	crawling: http://127.0.0.1:57889
-2026/09/02 18:29:45 INFO Request Metrics metrics_count=1 host_name=127.0.0.1 errors_encountered=0 latency=1.0012ms status_frequency=1
-  336667	      3685 ns/op	      72 B/op	       2 allocs/op
-BenchmarkCrawling-8   	crawling: http://127.0.0.1:57891
-2026/09/02 18:29:47 INFO Request Metrics metrics_count=1 host_name=127.0.0.1 errors_encountered=0 latency=1.011ms status_frequency=1
-  329152	      3580 ns/op	      72 B/op	       2 allocs/op
+BenchmarkCrawling-8   	 1044259	      1131 ns/op	      72 B/op	       2 allocs/op
+BenchmarkCrawling-8   	 1000000	      1104 ns/op	      72 B/op	       2 allocs/op
+BenchmarkCrawling-8   	 1000000	      2749 ns/op	      72 B/op	       2 allocs/op
+BenchmarkCrawling-8   	  520333	      2852 ns/op	      72 B/op	       2 allocs/op
+BenchmarkCrawling-8   	  610960	      2319 ns/op	      72 B/op	       2 allocs/op
+BenchmarkCrawling-8   	  550388	      2894 ns/op	      72 B/op	       2 allocs/op
+BenchmarkCrawling-8   	  579456	      2270 ns/op	      72 B/op	       2 allocs/op
+BenchmarkCrawling-8   	 1000000	      2033 ns/op	      72 B/op	       2 allocs/op
+BenchmarkCrawling-8   	 1000000	      2171 ns/op	      72 B/op	       2 allocs/op
+BenchmarkCrawling-8   	  403304	      3921 ns/op	      72 B/op	       2 allocs/op
+BenchmarkCrawling-8   	  600386	      2639 ns/op	      72 B/op	       2 allocs/op
+BenchmarkCrawling-8   	  864818	      2663 ns/op	      72 B/op	       2 allocs/op
+BenchmarkCrawling-8   	  306704	      3894 ns/op	      72 B/op	       2 allocs/op
+BenchmarkCrawling-8   	  297902	      3908 ns/op	      72 B/op	       2 allocs/op
+BenchmarkCrawling-8   	  288832	      3878 ns/op	      72 B/op	       2 allocs/op
+BenchmarkCrawling-8   	  422066	      2440 ns/op	      72 B/op	       2 allocs/op
+BenchmarkCrawling-8   	  336838	      3085 ns/op	      72 B/op	       2 allocs/op
+BenchmarkCrawling-8   	 1042486	      1705 ns/op	      72 B/op	       2 allocs/op
+BenchmarkCrawling-8   	 1000000	      2045 ns/op	      72 B/op	       2 allocs/op
+BenchmarkCrawling-8   	  381346	      2945 ns/op	      72 B/op	       2 allocs/op
 PASS
-ok  	github.com/72sevenzy2/web-crawler/benchmarks	14.006s
+ok  	github.com/72sevenzy2/web-crawler/benchmarks	36.039s
