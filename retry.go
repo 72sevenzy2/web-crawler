@@ -86,10 +86,6 @@ func (r *RetryTransport) RoundTrip(z *http.Request) (*http.Response, error) {
 		// check if we have attempts remaining.
 		if v == maxAttempts-1 {
 			break
-		} else {
-			// if we have more attempts then drain previous requests resp.Body to avoid file descriptor/socket leaks.
-			// at out final requst, we'ed break and return resp and drain via DrainClose() in crawl.go.
-			DrainClose(resp) // doing so before reaching the next attempt.
 		}
 
 		delay := r.CalculateBackoffDelay(v)

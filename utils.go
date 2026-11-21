@@ -4,7 +4,6 @@ import (
 	"errors"
 	"io"
 	"math/rand"
-	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -125,16 +124,6 @@ func (c *Crawler) LimitHost(host string) *rate.Limiter {
 // MaxDrainSize is to limit number of bytes when draining resp.Body.
 // Also prevents draining massive payloads from HTML, which can hang for long periods.
 const MaxDrainSize = 64 * 1024 // 64 KiB
-
-// for draining underlying TCP connection from remote node, so that the http transport can reuse connection whilst eliminating need for seperate TLS handshake for similar network calls.
-func DrainClose(resp *http.Response) {
-	// protecting against nil response panics.
-	if resp == nil || resp.Body == nil {
-		return
-	}
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, MaxDrainSize))
-	_ = resp.Body.Close()
-}
 
 // computing backoff delay (for retry.go) upon request failure with jittered duration, this avoids the "thundering herd" design flaw.
 func (r *RetryTransport) CalculateBackoffDelay(attempt int) time.Duration {

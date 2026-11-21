@@ -133,10 +133,6 @@ func (c *Crawler) crawl(ctx context.Context, url string, depth int) error {
 		return err
 	}
 
-	// DrainClose closes resp.Body while freeing its underlying TCP connection for reuse by HTTP transport.
-	// Draining before recusion to avoid socket/file descriptor leaks at high concurrent requests during crawler lifetime.
-	DrainClose(resp)
-
 	// recursive call untill max depth is exceeded.
 	for _, link := range links {
 		l := link // explicitly defining each loop variable.
